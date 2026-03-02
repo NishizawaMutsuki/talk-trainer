@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { callGemini, GeminiError } from "@/lib/gemini";
 import { getInsightsForCategory } from "@/lib/knowledge";
+import { getUserByGoogleId, incrementUsage } from "@/lib/db";
 import type { AnalysisResult } from "@/lib/types";
+
+const FREE_LIMIT = 10;
 
 const ANALYSIS_PROMPT = `あなたはMatt Abrahams著「Think Fast, Talk Smart」のメソッドを熟知した面接対策コーチです。
 以下の面接回答を、複数のフレームワークの観点から分析してください。
@@ -90,6 +95,20 @@ function validateAnalysis(data: unknown): data is AnalysisResult {
 
 export async function POST(req: NextRequest) {
   try {
+    // ── 認証 & 利用回数チェック ──
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
+    }
+    const googleId = (session.user as Record<string, unknown>).googleId as string;
+    const user = await getUserByGoogleId(googleId);
+    if (user && user.plan !== "pro" && user.usage_count >= FREE_LIMIT) {
+      return NextResponse.json(
+        { error: "無料プランの利用上限に達しました。Proプランにアップグレードしてください。", code: "LIMIT_REACHED" },
+        { status: 403 }
+      );
+    }
+
     const { question, answer, recommended_framework, chain, category } = await req.json();
 
     if (!question || !answer) {
@@ -111,6 +130,8 @@ export async function POST(req: NextRequest) {
       const result = await callGemini({ prompt, temperature: 0.3 });
 
       if (validateAnalysis(result)) {
+        // 成功時に利用回数をインクリメント
+        await incrementUsage(googleId);
         return NextResponse.json(result);
       }
 

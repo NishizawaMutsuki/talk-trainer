@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
 
 // ─── Shared modules ─────────────────────────────────────────────
-import type { Screen, AnalysisResult, HistoryEntry, ChainTurn, FollowupInfo, ChallengeInfo } from "@/lib/types";
+import type { Screen, AnalysisResult, HistoryEntry, ChainTurn, FollowupInfo, ChallengeInfo, UserStatus } from "@/lib/types";
 import {
   QUESTIONS,
   FRAMEWORKS,
@@ -33,6 +34,8 @@ import { ResultScreen } from "@/components/ResultScreen";
 // ─── Main App ───────────────────────────────────────────────────
 
 export default function TalkTrainer() {
+  const { data: session, status: authStatus } = useSession();
+  const [userStatus, setUserStatus] = useState<UserStatus>({ loggedIn: false });
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [category, setCategory] = useState("");
@@ -99,6 +102,34 @@ export default function TalkTrainer() {
     setDailyGoal(loadDailyGoal());
   }, []);
 
+  // ── Fetch user status ──
+  const fetchUserStatus = useCallback(async () => {
+    if (authStatus !== "authenticated") {
+      setUserStatus({ loggedIn: false });
+      return;
+    }
+    try {
+      const res = await fetch("/api/user");
+      const data: UserStatus = await res.json();
+      setUserStatus(data);
+    } catch {
+      setUserStatus({ loggedIn: true, plan: "free", usage: 0, limit: 10, canUse: true });
+    }
+  }, [authStatus]);
+
+  useEffect(() => {
+    fetchUserStatus();
+  }, [fetchUserStatus]);
+
+  // Handle ?upgraded=true from Stripe success redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("upgraded") === "true") {
+      window.history.replaceState({}, "", "/");
+      fetchUserStatus();
+    }
+  }, [fetchUserStatus]);
+
   const saveHistory = useCallback((h: HistoryEntry[]) => {
     setHistory(h);
     historyRef.current = h;
@@ -119,6 +150,17 @@ export default function TalkTrainer() {
 
   // ── Navigation ──
   const startPractice = useCallback(async (cat: string) => {
+    // ログインチェック
+    if (!userStatus.loggedIn) {
+      signIn("google");
+      return;
+    }
+    // 利用上限チェック
+    if (!userStatus.canUse) {
+      setScreen("paywall");
+      return;
+    }
+
     setCategory(cat);
     setTranscript("");
     setError(null);
@@ -317,6 +359,15 @@ export default function TalkTrainer() {
       });
       if (!res.ok) {
         const err = await res.json();
+        if (res.status === 401) {
+          signIn("google");
+          return;
+        }
+        if (res.status === 403 && err.code === "LIMIT_REACHED") {
+          await fetchUserStatus();
+          setScreen("paywall");
+          return;
+        }
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const data: AnalysisResult = await res.json();
@@ -336,12 +387,13 @@ export default function TalkTrainer() {
         rootQuestion: chain.length > 0 ? rootQuestion : undefined,
       };
       saveHistory([entry, ...historyRef.current]);
+      await fetchUserStatus(); // 利用回数を更新
       setScreen("result");
     } catch (e) {
       setError("分析エラー: " + (e instanceof Error ? e.message : "もう一度お試しください"));
       setScreen("reviewing");
     }
-  }, [transcript, recommendedFrameworks, question, category, seconds, saveHistory, chain, rootQuestion]);
+  }, [transcript, recommendedFrameworks, question, category, seconds, saveHistory, chain, rootQuestion, fetchUserStatus]);
 
   // ── Screen label helper ──
   const screenLabel = isDeepDive ? `${category} — 深掘り ${chain.length}回目` : category;
@@ -354,6 +406,33 @@ export default function TalkTrainer() {
       {/* ── HOME ── */}
       {screen === "home" && (
         <div className="max-w-[500px] mx-auto px-4 pt-12 pb-20">
+          {/* Auth header */}
+          <div className="flex justify-end mb-4">
+            {authStatus === "loading" ? (
+              <div className="w-20 h-8 bg-white/[0.04] rounded-lg animate-pulse" />
+            ) : session ? (
+              <div className="flex items-center gap-3">
+                {userStatus.plan === "pro" ? (
+                  <span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400/80 tracking-wider">
+                    PRO
+                  </span>
+                ) : userStatus.usage !== undefined ? (
+                  <span className="text-[10px] px-2 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/30">
+                    {userStatus.usage}/{userStatus.limit}回
+                  </span>
+                ) : null}
+                <button onClick={() => signOut()} className="text-white/30 text-xs hover:text-white/50 transition-colors">
+                  ログアウト
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => signIn("google")}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/60 text-xs hover:bg-white/[0.1] hover:text-white/80 transition-all">
+                <svg width="14" height="14" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                Googleでログイン
+              </button>
+            )}
+          </div>
           {/* Error toast */}
           {error && (
             <div className="mb-6 bg-red-500/[0.08] border border-red-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -739,6 +818,67 @@ export default function TalkTrainer() {
           <p className="text-white/20 text-xs max-w-xs text-center leading-relaxed mt-4">
             🎲 AIがあなたにぴったりのお題を生成中
           </p>
+        </div>
+      )}
+
+      {/* ── PAYWALL ── */}
+      {screen === "paywall" && (
+        <div className="min-h-screen flex flex-col items-center justify-center px-4">
+          <div className="max-w-md w-full">
+            <div className="text-center mb-8">
+              <div className="text-5xl mb-4">🔒</div>
+              <h2 className="text-2xl font-light text-white/90 mb-2">無料枠を使い切りました</h2>
+              <p className="text-white/40 text-sm">
+                {userStatus.limit}回の無料練習が完了しました。<br />
+                Proプランで無制限に練習を続けましょう。
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-amber-500/[0.08] to-orange-500/[0.08] border border-amber-500/20 rounded-2xl p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-white/90 font-medium">Talk Trainer Pro</h3>
+                  <p className="text-white/40 text-xs mt-1">AIコーチ付き面接練習</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-light text-amber-400/90">¥990</p>
+                  <p className="text-white/30 text-[10px]">/ 月</p>
+                </div>
+              </div>
+              <div className="space-y-2 mb-5">
+                {[
+                  "練習回数が無制限",
+                  "深掘り練習も無制限",
+                  "1分チャレンジも無制限",
+                  "AIコーチからの詳細フィードバック",
+                ].map((f) => (
+                  <div key={f} className="flex items-center gap-2">
+                    <span className="text-emerald-400/80 text-xs">✓</span>
+                    <span className="text-white/50 text-xs">{f}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/checkout", { method: "POST" });
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                  } catch {
+                    setError("決済ページの取得に失敗しました");
+                  }
+                }}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500/80 to-orange-500/80 text-white text-sm tracking-wider shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              >
+                Proプランに登録する
+              </button>
+            </div>
+
+            <button onClick={() => setScreen("home")}
+              className="w-full text-center text-white/25 text-xs hover:text-white/50 transition-colors">
+              ← ホームに戻る
+            </button>
+          </div>
         </div>
       )}
 

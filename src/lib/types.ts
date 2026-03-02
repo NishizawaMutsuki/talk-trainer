@@ -116,4 +116,15 @@ export type Screen =
   | "result"
   | "history"
   | "followup-generating"
-  | "challenge-generating";
+  | "challenge-generating"
+  | "paywall";
+
+// ─── User Status ────────────────────────────────────────────────
+
+export interface UserStatus {
+  loggedIn: boolean;
+  plan?: "free" | "pro";
+  usage?: number;
+  limit?: number;
+  canUse?: boolean;
+}

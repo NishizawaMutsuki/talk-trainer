@@ -27,3 +27,4 @@ data/subs_clean/
 data/fetch_subs.py
 data/*.tsv
 # data/knowledge/ is kept — needed at runtime
+.vercel
