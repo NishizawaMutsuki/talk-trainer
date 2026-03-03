@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { callGemini, GeminiError } from "@/lib/gemini";
 import type { ChallengeInfo } from "@/lib/types";
 
@@ -43,6 +45,12 @@ function validateChallenge(data: unknown): data is ChallengeInfo {
 
 export async function POST(req: NextRequest) {
   try {
+    // ── 認証チェック ──
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
+    }
+
     const { pastTopics } = await req.json().catch(() => ({ pastTopics: [] }));
 
     const pastSection = Array.isArray(pastTopics) && pastTopics.length > 0

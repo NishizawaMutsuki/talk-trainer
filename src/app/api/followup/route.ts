@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { callGemini, GeminiError } from "@/lib/gemini";
 import { QUESTIONS } from "@/lib/constants";
 import type { FollowupInfo } from "@/lib/types";
@@ -78,6 +80,12 @@ function validateFollowup(data: unknown): data is FollowupInfo {
 
 export async function POST(req: NextRequest) {
   try {
+    // ── 認証チェック ──
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
+    }
+
     const { category, chain } = await req.json();
 
     if (!chain?.length) {

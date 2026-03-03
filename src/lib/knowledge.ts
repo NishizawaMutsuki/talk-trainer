@@ -115,28 +115,3 @@ export function getInsightsForCategory(category: string): string {
 ${lines.join("\n")}
 `;
 }
-
-/**
- * Get a single random insight for coaching tip display.
- * Optionally filtered by category.
- */
-export function getRandomInsight(category?: string): Insight | null {
-  const all = loadInsights();
-  if (all.length === 0) return null;
-
-  if (category) {
-    const ids = [
-      ...(CATEGORY_INSIGHTS[category] ?? []),
-      ...(CATEGORY_INSIGHTS.universal ?? []),
-    ];
-    const insightMap = new Map(all.map((i) => [i.id, i]));
-    const filtered = ids
-      .map((id) => insightMap.get(id))
-      .filter((i): i is Insight => i !== undefined);
-    if (filtered.length > 0) {
-      return filtered[Math.floor(Math.random() * filtered.length)];
-    }
-  }
-
-  return all[Math.floor(Math.random() * all.length)];
-}
