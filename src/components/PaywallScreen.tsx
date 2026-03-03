@@ -38,6 +38,7 @@ export function PaywallScreen({ userStatus, onError, onBack }: PaywallScreenProp
               "深掘り練習も無制限",
               "1分チャレンジも無制限",
               "AIコーチからの詳細フィードバック",
+              "高性能AI (Gemini 2.5 Pro) を使用",
             ].map((f) => (
               <div key={f} className="flex items-center gap-2">
                 <span className="text-emerald-400/80 text-xs">✓</span>

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { callGemini, GeminiError } from "@/lib/gemini";
+import { callGemini, GeminiError, type GeminiModel } from "@/lib/gemini";
+import { getUserByGoogleId } from "@/lib/db";
 import { QUESTIONS } from "@/lib/constants";
 import type { FollowupInfo } from "@/lib/types";
 
@@ -119,8 +120,13 @@ export async function POST(req: NextRequest) {
     // Lower temperature for pick mode (just selecting), higher for generation
     const temperature = usePick ? 0.3 : 0.7;
 
+    // Select model based on user plan
+    const googleId = (session.user as Record<string, unknown>).googleId as string;
+    const user = await getUserByGoogleId(googleId);
+    const model: GeminiModel = user?.plan === "pro" ? "pro" : "flash";
+
     for (let attempt = 0; attempt < 2; attempt++) {
-      const result = await callGemini({ prompt, temperature });
+      const result = await callGemini({ prompt, temperature, model });
 
       if (!validateFollowup(result)) {
         console.warn(`Followup validation failed (attempt ${attempt + 1}):`, JSON.stringify(result).slice(0, 300));

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { callGemini, GeminiError } from "@/lib/gemini";
+import { callGemini, GeminiError, type GeminiModel } from "@/lib/gemini";
 import { getInsightsForCategory } from "@/lib/knowledge";
 import { getUserByGoogleId, incrementUsage } from "@/lib/db";
 import type { AnalysisResult } from "@/lib/types";
@@ -125,9 +125,12 @@ export async function POST(req: NextRequest) {
       .replace("{knowledge_section}", knowledgeSection)
       + buildChainContext(chain);
 
+    // Select model based on user plan
+    const model: GeminiModel = user?.plan === "pro" ? "pro" : "flash";
+
     // Retry once on validation failure
     for (let attempt = 0; attempt < 2; attempt++) {
-      const result = await callGemini({ prompt, temperature: 0.3 });
+      const result = await callGemini({ prompt, temperature: 0.3, model });
 
       if (validateAnalysis(result)) {
         // 成功時に利用回数をインクリメント

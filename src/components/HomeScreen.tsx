@@ -44,7 +44,7 @@ export function HomeScreen({
           <div className="flex items-center gap-3">
             {userStatus.plan === "pro" ? (
               <span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400/80 tracking-wider">
-                PRO
+                PRO ・ Gemini 2.5 Pro
               </span>
             ) : userStatus.usage !== undefined ? (
               <span className="text-[10px] px-2 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/30">

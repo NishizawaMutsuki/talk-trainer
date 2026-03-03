@@ -127,4 +127,5 @@ export interface UserStatus {
   usage?: number;
   limit?: number;
   canUse?: boolean;
+  model?: string;
 }

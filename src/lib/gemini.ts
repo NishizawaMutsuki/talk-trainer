@@ -2,26 +2,32 @@
 // Single place for Gemini fetch + JSON parse logic.
 // Includes exponential backoff for 429 rate limits.
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const MODEL_FREE = "gemini-2.5-flash";
+const MODEL_PRO = "gemini-2.5-pro";
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 1500; // 1.5s → 3s
+
+export type GeminiModel = "flash" | "pro";
 
 export interface GeminiOptions {
   prompt: string;
   temperature?: number;
+  /** User plan — "pro" uses Gemini 2.5 Pro, otherwise Flash */
+  model?: GeminiModel;
 }
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function callGemini({ prompt, temperature = 0.3 }: GeminiOptions): Promise<unknown> {
+export async function callGemini({ prompt, temperature = 0.3, model = "flash" }: GeminiOptions): Promise<unknown> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new GeminiError("GEMINI_API_KEY が設定されていません", 500);
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const modelId = model === "pro" ? MODEL_PRO : MODEL_FREE;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
   const body = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {

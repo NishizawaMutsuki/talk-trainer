@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { callGemini, GeminiError } from "@/lib/gemini";
+import { callGemini, GeminiError, type GeminiModel } from "@/lib/gemini";
+import { getUserByGoogleId } from "@/lib/db";
 import type { ChallengeInfo } from "@/lib/types";
 
 const CHALLENGE_PROMPT = `あなたは即興スピーチのコーチです。
@@ -59,8 +60,13 @@ export async function POST(req: NextRequest) {
 
     const prompt = CHALLENGE_PROMPT.replace("{past_topics}", pastSection);
 
+    // Select model based on user plan
+    const googleId = (session.user as Record<string, unknown>).googleId as string;
+    const user = await getUserByGoogleId(googleId);
+    const model: GeminiModel = user?.plan === "pro" ? "pro" : "flash";
+
     for (let attempt = 0; attempt < 2; attempt++) {
-      const result = await callGemini({ prompt, temperature: 0.9 });
+      const result = await callGemini({ prompt, temperature: 0.9, model });
 
       if (validateChallenge(result)) {
         return NextResponse.json(result);

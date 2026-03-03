@@ -26,5 +26,6 @@ export async function GET() {
     usage: user.usage_count,
     limit: FREE_LIMIT,
     canUse,
+    model: user.plan === "pro" ? "gemini-2.5-pro" : "gemini-2.5-flash",
   });
 }
