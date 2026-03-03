@@ -26,18 +26,19 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 function AscentLogoMark() {
   return (
-    <svg width="28" height="28" viewBox="0 0 48 48" fill="none" className="opacity-60">
-      <circle cx="24" cy="24" r="14" stroke="rgba(255,255,255,0.08)" strokeWidth="1.5" fill="none"/>
-      <path d="M24 34V14" stroke="url(#hmOrbitG)" strokeWidth="2.5" strokeLinecap="round"/>
-      <path d="M19 19L24 14L29 19" stroke="url(#hmOrbitG)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <ellipse cx="24" cy="24" rx="18" ry="7" stroke="url(#hmOrbitG)" strokeWidth="1" fill="none" opacity="0.3" transform="rotate(-20 24 24)"/>
-      <defs>
-        <linearGradient id="hmOrbitG" x1="24" y1="34" x2="24" y2="14">
-          <stop offset="0%" stopColor="#38bdf8"/>
-          <stop offset="100%" stopColor="#a78bfa"/>
-        </linearGradient>
-      </defs>
-    </svg>
+    <div className="flex items-center gap-2.5">
+      <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+        <path d="M6 40L18 8L24 22L30 8L42 40" stroke="url(#hmPeakG)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        <path d="M12 40L18 26L24 32L30 20L36 40" stroke="url(#hmPeakG)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.3"/>
+        <defs>
+          <linearGradient id="hmPeakG" x1="6" y1="40" x2="42" y2="8">
+            <stop offset="0%" stopColor="#38bdf8"/>
+            <stop offset="100%" stopColor="#818cf8"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <span className="text-[15px] font-semibold tracking-[-0.01em] text-white/80" style={{ fontFamily: "'Outfit', sans-serif" }}>Ascent</span>
+    </div>
   );
 }
 
