@@ -23,6 +23,7 @@ export function HomeScreen({
   onNavigate,
 }: HomeScreenProps) {
   const { data: session, status: authStatus } = useSession();
+  const role = (session?.user as Record<string, unknown> | undefined)?.role as string | undefined;
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const stats = useMemo(() => ({
@@ -148,6 +149,16 @@ export function HomeScreen({
             className="text-white/25 text-xs hover:text-white/50 transition-colors underline underline-offset-4 decoration-white/10">
             練習履歴を見る
           </button>
+        </div>
+      )}
+
+      {/* Admin link — only shown for admins */}
+      {role === "admin" && (
+        <div className="text-center mt-8">
+          <a href="/admin"
+            className="text-white/15 text-[10px] hover:text-white/40 transition-colors">
+            🔧 管理画面
+          </a>
         </div>
       )}
     </div>

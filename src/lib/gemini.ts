@@ -2,7 +2,7 @@
 // Single place for Gemini fetch + JSON parse logic.
 // Includes exponential backoff for 429 rate limits.
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 1500; // 1.5s → 3s
 
