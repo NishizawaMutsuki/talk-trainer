@@ -3,8 +3,9 @@ import Providers from "@/components/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "話し方構造化トレーナー",
+  title: "Talk Trainer — AIで面接練習",
   description: "PREP法・STAR法で面接回答の構造を分析し、伝えるスキルを磨くアプリ",
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({
@@ -16,12 +17,19 @@ export default function RootLayout({
     <html lang="ja">
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@200;300;400;500;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@200;300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>
       <body className="antialiased text-white">
-        <Providers>{children}</Providers>
+        {/* Ambient background layers */}
+        <div className="bg-ambient" />
+        <div className="bg-grid" />
+        <div className="noise-overlay" />
+        {/* Main content */}
+        <div className="screen-content">
+          <Providers>{children}</Providers>
+        </div>
       </body>
     </html>
   );
