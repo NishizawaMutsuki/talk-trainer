@@ -1,0 +1,13 @@
+<svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" rx="10" fill="#0a0f1a"/>
+  <circle cx="24" cy="24" r="14" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" fill="none"/>
+  <path d="M24 34V14" stroke="url(#favGrad)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M19 19L24 14L29 19" stroke="url(#favGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="24" cy="24" rx="18" ry="7" stroke="url(#favGrad)" stroke-width="1" fill="none" opacity="0.3" transform="rotate(-20 24 24)"/>
+  <defs>
+    <linearGradient id="favGrad" x1="24" y1="34" x2="24" y2="14">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+</svg>
