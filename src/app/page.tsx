@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 
 // ─── Shared modules ─────────────────────────────────────────────
-import type { Screen, AnalysisResult, HistoryEntry, ChainTurn, FollowupInfo, ChallengeInfo, UserStatus } from "@/lib/types";
+import type { Screen, AnalysisResult, HistoryEntry, ChainTurn, FollowupInfo, ChallengeInfo, UserStatus, AIModelKey } from "@/lib/types";
 import {
   FRAMEWORKS,
   COACHING_TIPS,
@@ -48,6 +48,7 @@ export default function TalkTrainer() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dailyGoal, setDailyGoal] = useState(DAILY_GOAL_DEFAULT);
+  const [selectedModel, setSelectedModel] = useState<AIModelKey>("gemini-flash");
 
   // Deep dive state
   const [chain, setChain] = useState<ChainTurn[]>([]);
@@ -165,7 +166,7 @@ export default function TalkTrainer() {
         const res = await fetch("/api/challenge", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pastTopics }),
+          body: JSON.stringify({ pastTopics, aiModel: selectedModel }),
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
@@ -188,7 +189,7 @@ export default function TalkTrainer() {
       setRootQuestion(q);
       setScreen("practice");
     }
-  }, [history, resetDeepDive, userStatus]);
+  }, [history, resetDeepDive, userStatus, selectedModel]);
 
   // ── Deep Dive ──
   const startDeepDive = useCallback(async () => {
@@ -211,6 +212,7 @@ export default function TalkTrainer() {
         body: JSON.stringify({
           category,
           chain: pendingChain.map(t => ({ question: t.question, answer: t.answer })),
+          aiModel: selectedModel,
         }),
       });
       if (!res.ok) {
@@ -235,7 +237,7 @@ export default function TalkTrainer() {
       setError("深掘り質問の生成に失敗しました: " + (e instanceof Error ? e.message : ""));
       setScreen("result");
     }
-  }, [result, transcript, question, seconds, chain, category]);
+  }, [result, transcript, question, seconds, chain, category, selectedModel]);
 
   // ── Media cleanup helper ──
   const cleanupMedia = useCallback(() => {
@@ -336,6 +338,7 @@ export default function TalkTrainer() {
           chain: chain.length > 0
             ? chain.map(t => ({ question: t.question, answer: t.answer }))
             : undefined,
+          aiModel: selectedModel,
         }),
       });
       if (!res.ok) {
@@ -374,7 +377,7 @@ export default function TalkTrainer() {
       setError("分析エラー: " + (e instanceof Error ? e.message : "もう一度お試しください"));
       setScreen("reviewing");
     }
-  }, [transcript, recommendedFrameworks, question, category, seconds, saveHistory, chain, rootQuestion, fetchUserStatus]);
+  }, [transcript, recommendedFrameworks, question, category, seconds, saveHistory, chain, rootQuestion, fetchUserStatus, selectedModel]);
 
   // ── Screen label helper ──
   const screenLabel = isDeepDive ? `${category} — 深掘り ${chain.length}回目` : category;
@@ -389,6 +392,8 @@ export default function TalkTrainer() {
           userStatus={userStatus}
           history={history}
           error={error}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
           onClearError={() => setError(null)}
           onStartPractice={startPractice}
           onNavigate={setScreen}

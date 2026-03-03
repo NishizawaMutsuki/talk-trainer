@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { callGemini, GeminiError, type GeminiModel } from "@/lib/gemini";
-import { getUserByGoogleId } from "@/lib/db";
+import { callAI, AIError, type AIModelKey, AI_MODELS } from "@/lib/ai-router";
 import { QUESTIONS } from "@/lib/constants";
 import type { FollowupInfo } from "@/lib/types";
 
@@ -87,7 +86,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
     }
 
-    const { category, chain } = await req.json();
+    const { category, chain, aiModel: requestedModel } = await req.json();
 
     if (!chain?.length) {
       return NextResponse.json({ error: "会話チェーンが必要です" }, { status: 400 });
@@ -120,13 +119,14 @@ export async function POST(req: NextRequest) {
     // Lower temperature for pick mode (just selecting), higher for generation
     const temperature = usePick ? 0.3 : 0.7;
 
-    // Select model based on user plan
-    const googleId = (session.user as Record<string, unknown>).googleId as string;
-    const user = await getUserByGoogleId(googleId);
-    const model: GeminiModel = user?.plan === "pro" ? "pro" : "flash";
+    // Use model from request body, default to gemini-flash
+    let selectedModel: AIModelKey = "gemini-flash";
+    if (requestedModel && AI_MODELS[requestedModel as AIModelKey]) {
+      selectedModel = requestedModel as AIModelKey;
+    }
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const result = await callGemini({ prompt, temperature, model });
+      const result = await callAI({ prompt, temperature, model: selectedModel });
 
       if (!validateFollowup(result)) {
         console.warn(`Followup validation failed (attempt ${attempt + 1}):`, JSON.stringify(result).slice(0, 300));
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     console.error("Followup generation error:", err);
-    const status = err instanceof GeminiError ? err.status : 500;
+    const status = err instanceof AIError ? err.status : 500;
     const message = err instanceof Error ? err.message : "深掘り質問の生成でエラーが発生しました";
     return NextResponse.json({ error: message }, { status });
   }

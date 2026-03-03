@@ -2,13 +2,23 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { QUESTIONS, CHALLENGE_CATEGORY } from "@/lib/constants";
-import type { HistoryEntry, UserStatus } from "@/lib/types";
+import type { HistoryEntry, UserStatus, AIModelKey } from "@/lib/types";
 import { useMemo, useState } from "react";
+
+const MODEL_LABELS: Record<AIModelKey, { label: string; desc: string; badge?: string }> = {
+  "gemini-flash": { label: "Standard", desc: "Gemini Flash · 高速" },
+  "gemini-pro":   { label: "Think Mode", desc: "Gemini Pro · 高精度", badge: "PRO" },
+  "claude-haiku": { label: "Claude Haiku", desc: "Anthropic · 高速・高品質", badge: "PRO" },
+  "claude-sonnet":{ label: "Claude Sonnet", desc: "Anthropic · 最高品質", badge: "PRO" },
+  "claude-opus":  { label: "Claude Opus", desc: "Anthropic · 最高知能", badge: "PRO" },
+};
 
 interface HomeScreenProps {
   userStatus: UserStatus;
   history: HistoryEntry[];
   error: string | null;
+  selectedModel: AIModelKey;
+  onModelChange: (model: AIModelKey) => void;
   onClearError: () => void;
   onStartPractice: (category: string) => void;
   onNavigate: (screen: "dashboard" | "history") => void;
@@ -18,6 +28,8 @@ export function HomeScreen({
   userStatus,
   history,
   error,
+  selectedModel,
+  onModelChange,
   onClearError,
   onStartPractice,
   onNavigate,
@@ -25,6 +37,8 @@ export function HomeScreen({
   const { data: session, status: authStatus } = useSession();
   const role = (session?.user as Record<string, unknown> | undefined)?.role as string | undefined;
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const availableModels = userStatus.availableModels || ["gemini-flash"];
 
   const stats = useMemo(() => ({
     total: history.length,
@@ -42,11 +56,16 @@ export function HomeScreen({
           <div className="w-20 h-8 bg-white/[0.04] rounded-lg animate-pulse" />
         ) : session ? (
           <div className="flex items-center gap-3">
-            {userStatus.plan === "pro" ? (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400/80 tracking-wider">
-                PRO ・ Think Mode
+            {userStatus.unlimited && (
+              <span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-violet-500/20 to-purple-500/20 border border-violet-500/30 text-violet-400/80 tracking-wider">
+                ∞ ADMIN
               </span>
-            ) : userStatus.usage !== undefined ? (
+            )}
+            {userStatus.plan === "pro" && !userStatus.unlimited ? (
+              <span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400/80 tracking-wider">
+                PRO
+              </span>
+            ) : !userStatus.unlimited && userStatus.usage !== undefined ? (
               <span className="text-[10px] px-2 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/30">
                 {userStatus.usage}/{userStatus.limit}回
               </span>
@@ -96,6 +115,48 @@ export function HomeScreen({
               <div className="text-[10px] tracking-wider uppercase text-white/30 mt-1">{l}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Model selector — shown when multiple models available */}
+      {availableModels.length > 1 && (
+        <div className="mb-8">
+          <button
+            onClick={() => setShowModelPicker(!showModelPicker)}
+            className="mx-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-all"
+          >
+            <span className="text-[10px] text-white/40">AIモデル:</span>
+            <span className="text-[11px] text-white/70 font-medium">{MODEL_LABELS[selectedModel].label}</span>
+            <span className="text-[10px] text-white/20">{showModelPicker ? "▲" : "▼"}</span>
+          </button>
+          {showModelPicker && (
+            <div className="mt-2 grid gap-1.5 max-w-[400px] mx-auto">
+              {availableModels.map((m) => {
+                const info = MODEL_LABELS[m];
+                const isSelected = selectedModel === m;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => { onModelChange(m); setShowModelPicker(false); }}
+                    className={`flex items-center justify-between px-4 py-2.5 rounded-lg border transition-all ${
+                      isSelected
+                        ? "bg-white/[0.08] border-cyan-500/30 shadow-sm"
+                        : "bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${isSelected ? "bg-cyan-400" : "bg-white/10"}`} />
+                      <span className={`text-xs ${isSelected ? "text-white/90" : "text-white/50"}`}>{info.label}</span>
+                      {info.badge && (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400/70">{info.badge}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-white/25">{info.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

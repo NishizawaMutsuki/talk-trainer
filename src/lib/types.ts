@@ -121,6 +121,8 @@ export type Screen =
 
 // ─── User Status ────────────────────────────────────────────────
 
+export type AIModelKey = "gemini-flash" | "gemini-pro" | "claude-haiku" | "claude-sonnet" | "claude-opus";
+
 export interface UserStatus {
   loggedIn: boolean;
   plan?: "free" | "pro";
@@ -128,4 +130,7 @@ export interface UserStatus {
   limit?: number;
   canUse?: boolean;
   model?: string;
+  availableModels?: AIModelKey[];
+  unlimited?: boolean;
+  role?: string;
 }

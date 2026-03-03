@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { callGemini, GeminiError, type GeminiModel } from "@/lib/gemini";
+import { callAI, AIError, type AIModelKey, AI_MODELS } from "@/lib/ai-router";
 import { getInsightsForCategory } from "@/lib/knowledge";
 import { getUserByGoogleId, incrementUsage } from "@/lib/db";
 import type { AnalysisResult } from "@/lib/types";
@@ -101,15 +101,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
     }
     const googleId = (session.user as Record<string, unknown>).googleId as string;
+    const role = (session.user as Record<string, unknown>).role as string | undefined;
+    const isAdmin = role === "admin";
     const user = await getUserByGoogleId(googleId);
-    if (user && user.plan !== "pro" && user.usage_count >= FREE_LIMIT) {
+    if (user && !isAdmin && user.plan !== "pro" && user.usage_count >= FREE_LIMIT) {
       return NextResponse.json(
         { error: "無料プランの利用上限に達しました。Proプランにアップグレードしてください。", code: "LIMIT_REACHED" },
         { status: 403 }
       );
     }
 
-    const { question, answer, recommended_framework, chain, category } = await req.json();
+    const { question, answer, recommended_framework, chain, category, aiModel } = await req.json();
 
     if (!question || !answer) {
       return NextResponse.json({ error: "question と answer は必須です" }, { status: 400 });
@@ -125,16 +127,27 @@ export async function POST(req: NextRequest) {
       .replace("{knowledge_section}", knowledgeSection)
       + buildChainContext(chain);
 
-    // Select model based on user plan
-    const model: GeminiModel = user?.plan === "pro" ? "pro" : "flash";
+    // Select model: use requested model if user has access, otherwise default
+    const isPro = user?.plan === "pro" || isAdmin;
+    let selectedModel: AIModelKey = isPro ? "gemini-pro" : "gemini-flash";
+    if (aiModel && AI_MODELS[aiModel as AIModelKey]) {
+      const requested = aiModel as AIModelKey;
+      const tier = AI_MODELS[requested].tier;
+      if (tier === "free" || isPro) {
+        selectedModel = requested;
+      }
+    }
 
     // Retry once on validation failure
     for (let attempt = 0; attempt < 2; attempt++) {
-      const result = await callGemini({ prompt, temperature: 0.3, model });
+      const result = await callAI({ prompt, temperature: 0.3, model: selectedModel });
 
       if (validateAnalysis(result)) {
         // 成功時に利用回数をインクリメント
-        await incrementUsage(googleId);
+        // Admin doesn't consume usage
+        if (!isAdmin) {
+          await incrementUsage(googleId);
+        }
         return NextResponse.json(result);
       }
 
@@ -147,7 +160,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     console.error("Analysis error:", err);
-    const status = err instanceof GeminiError ? err.status : 500;
+    const status = err instanceof AIError ? err.status : 500;
     const message = err instanceof Error ? err.message : "分析処理でエラーが発生しました";
     return NextResponse.json({ error: message }, { status });
   }

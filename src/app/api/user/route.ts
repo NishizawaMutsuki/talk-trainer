@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUserByGoogleId } from "@/lib/db";
+import { FREE_MODELS, PRO_MODELS } from "@/lib/ai-router";
 
 const FREE_LIMIT = 10;
 
@@ -12,13 +13,27 @@ export async function GET() {
   }
 
   const googleId = (session.user as Record<string, unknown>).googleId as string;
+  const role = (session.user as Record<string, unknown>).role as string | undefined;
   const user = await getUserByGoogleId(googleId);
 
   if (!user) {
-    return NextResponse.json({ loggedIn: true, plan: "free", usage: 0, limit: FREE_LIMIT, canUse: true });
+    return NextResponse.json({
+      loggedIn: true,
+      plan: "free",
+      usage: 0,
+      limit: FREE_LIMIT,
+      canUse: true,
+      availableModels: FREE_MODELS,
+      unlimited: false,
+      role: role || "user",
+    });
   }
 
-  const canUse = user.plan === "pro" || user.usage_count < FREE_LIMIT;
+  const isAdmin = role === "admin";
+  const isPro = user.plan === "pro";
+  // Admin gets unlimited usage regardless of plan
+  const canUse = isAdmin || isPro || user.usage_count < FREE_LIMIT;
+  const unlimited = isAdmin;
 
   return NextResponse.json({
     loggedIn: true,
@@ -26,6 +41,8 @@ export async function GET() {
     usage: user.usage_count,
     limit: FREE_LIMIT,
     canUse,
-    model: user.plan === "pro" ? "think" : "standard",
+    availableModels: (isPro || isAdmin) ? PRO_MODELS : FREE_MODELS,
+    unlimited,
+    role: role || "user",
   });
 }

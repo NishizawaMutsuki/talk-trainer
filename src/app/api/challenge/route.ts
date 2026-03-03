@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { callGemini, GeminiError, type GeminiModel } from "@/lib/gemini";
-import { getUserByGoogleId } from "@/lib/db";
+import { callAI, AIError, type AIModelKey, AI_MODELS } from "@/lib/ai-router";
 import type { ChallengeInfo } from "@/lib/types";
 
 const CHALLENGE_PROMPT = `あなたは即興スピーチのコーチです。
@@ -52,7 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
     }
 
-    const { pastTopics } = await req.json().catch(() => ({ pastTopics: [] }));
+    const { pastTopics, aiModel: requestedModel } = await req.json().catch(() => ({ pastTopics: [], aiModel: undefined }));
 
     const pastSection = Array.isArray(pastTopics) && pastTopics.length > 0
       ? `【過去に出したお題（これらと被らないようにすること）】\n${pastTopics.map((t: string) => `- ${t}`).join("\n")}`
@@ -60,13 +59,14 @@ export async function POST(req: NextRequest) {
 
     const prompt = CHALLENGE_PROMPT.replace("{past_topics}", pastSection);
 
-    // Select model based on user plan
-    const googleId = (session.user as Record<string, unknown>).googleId as string;
-    const user = await getUserByGoogleId(googleId);
-    const model: GeminiModel = user?.plan === "pro" ? "pro" : "flash";
+    // Use model from request body, default to gemini-flash
+    let selectedModel: AIModelKey = "gemini-flash";
+    if (requestedModel && AI_MODELS[requestedModel as AIModelKey]) {
+      selectedModel = requestedModel as AIModelKey;
+    }
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const result = await callGemini({ prompt, temperature: 0.9, model });
+      const result = await callAI({ prompt, temperature: 0.9, model: selectedModel });
 
       if (validateChallenge(result)) {
         return NextResponse.json(result);
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     console.error("Challenge generation error:", err);
-    const status = err instanceof GeminiError ? err.status : 500;
+    const status = err instanceof AIError ? err.status : 500;
     const message = err instanceof Error ? err.message : "お題の生成でエラーが発生しました";
     return NextResponse.json({ error: message }, { status });
   }
