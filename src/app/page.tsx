@@ -255,54 +255,86 @@ export default function TalkTrainer() {
   }, []);
 
   // ── Recording ──
+  const accumulatedRef = useRef("");
+
   const startRecording = useCallback(async () => {
     setScreen("recording");
     setSeconds(0);
     setTranscript("");
     transcriptRef.current = "";
+    accumulatedRef.current = "";
     setSpeechStatus("idle");
 
     timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
 
+    // マイク許可を先に取得（モバイルで必要）
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      try {
+        const mr = new MediaRecorder(stream);
+        mr.start();
+        mediaRecorderRef.current = mr;
+      } catch {}
+    } catch {}
+
     try {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SR) {
-        const recognition = new SR();
-        recognition.lang = "ja-JP";
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.onstart = () => setSpeechStatus("listening");
-        recognition.onresult = (e: SpeechRecognitionEvent) => {
-          let final = "", interim = "";
-          for (let i = 0; i < e.results.length; i++) {
-            if (e.results[i].isFinal) final += e.results[i][0].transcript;
-            else interim += e.results[i][0].transcript;
-          }
-          transcriptRef.current = final;
-          setTranscript(final + interim);
+        const startNewSession = () => {
+          const rec = new SR();
+          rec.lang = "ja-JP";
+          rec.continuous = true;
+          rec.interimResults = true;
+
+          rec.onstart = () => setSpeechStatus("listening");
+
+          rec.onresult = (e: SpeechRecognitionEvent) => {
+            let final = "", interim = "";
+            for (let i = 0; i < e.results.length; i++) {
+              if (e.results[i].isFinal) final += e.results[i][0].transcript;
+              else interim += e.results[i][0].transcript;
+            }
+            // 前セッションの蓄積に加算
+            const fullFinal = accumulatedRef.current + final;
+            transcriptRef.current = fullFinal;
+            setTranscript(fullFinal + interim);
+          };
+
+          rec.onerror = (e: SpeechRecognitionErrorEvent) => {
+            // モバイルで頻発する無害なエラーは無視
+            if (e.error === "no-speech" || e.error === "aborted") return;
+            if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+              setSpeechStatus("unavailable");
+            } else {
+              setSpeechStatus("error");
+            }
+          };
+
+          rec.onend = () => {
+            // 現セッションの確定テキストを蓄積
+            accumulatedRef.current = transcriptRef.current;
+            // 録音中なら新しいインスタンスで再開（iOSでは同一インスタンスの再起動が失敗するため）
+            if (timerRef.current) {
+              try {
+                const newRec = startNewSession();
+                newRec.start();
+                recognitionRef.current = newRec;
+              } catch {
+                setSpeechStatus("error");
+              }
+            }
+          };
+
+          return rec;
         };
-        recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
-          if (e.error === "not-allowed" || e.error === "service-not-allowed") setSpeechStatus("unavailable");
-          else setSpeechStatus("error");
-        };
-        recognition.onend = () => {
-          if (timerRef.current) {
-            try { recognition.start(); } catch { setSpeechStatus("error"); }
-          }
-        };
+
+        const recognition = startNewSession();
         recognition.start();
         recognitionRef.current = recognition;
       } else {
         setSpeechStatus("unavailable");
       }
     } catch { setSpeechStatus("unavailable"); }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      mr.start();
-      mediaRecorderRef.current = mr;
-    } catch {}
   }, []);
 
   const stopRecording = useCallback(() => {
