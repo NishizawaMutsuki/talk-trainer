@@ -53,6 +53,39 @@ export function DashboardScreen({
       return { cat, practiced, total, pct: total > 0 ? Math.round(practiced / total * 100) : 0 };
     });
 
+  // ── Growth Stage ──
+  const totalCount = history.length;
+  const stages = [
+    { min: 0,   label: "入門", desc: "フレームワークを意識して話す段階", icon: "🌱", next: 10 },
+    { min: 10,  label: "基礎", desc: "PREP等の型が使えるようになってきた", icon: "🌿", next: 30 },
+    { min: 30,  label: "習得", desc: "構造を意識せず自然に使える段階へ", icon: "🌳", next: 50 },
+    { min: 50,  label: "応用", desc: "深掘りにも構造を崩さず対応できる", icon: "🔥", next: 100 },
+    { min: 100, label: "達人", desc: "どんな質問にも即座に構造化して回答", icon: "⭐", next: null },
+  ];
+  const currentStage = [...stages].reverse().find(s => totalCount >= s.min) || stages[0];
+  const nextThreshold = currentStage.next;
+  const stagePct = nextThreshold
+    ? Math.min(((totalCount - currentStage.min) / (nextThreshold - currentStage.min)) * 100, 100)
+    : 100;
+
+  // ── Structure score trend (構造スコア推移) ──
+  const structureTrend: { label: string; avg: number }[] = [];
+  if (history.length >= 5) {
+    // 練習を古い順に5分割してバケットごとの構造スコア平均を算出
+    const sorted = [...history].reverse();
+    const bucketSize = Math.ceil(sorted.length / 5);
+    for (let i = 0; i < sorted.length; i += bucketSize) {
+      const bucket = sorted.slice(i, i + bucketSize);
+      const entries = bucket.filter(h => h.overall_score != null);
+      if (entries.length > 0) {
+        const avg = Math.round(entries.reduce((a, h) => a + h.overall_score, 0) / entries.length * 10) / 10;
+        const start = i + 1;
+        const end = Math.min(i + bucketSize, sorted.length);
+        structureTrend.push({ label: `${start}-${end}回`, avg });
+      }
+    }
+  }
+
   // Score trend (last 14 days with data)
   const last14: { date: string; avg: number }[] = [];
   const seen = new Set<string>();
@@ -162,6 +195,79 @@ export function DashboardScreen({
             <span>{last14[0]?.date.split("/").slice(1).join("/")}</span>
             <span>{last14[last14.length - 1]?.date.split("/").slice(1).join("/")}</span>
           </div>
+        </div>
+      )}
+
+      {/* Growth Stage */}
+      <div className="bg-gradient-to-br from-violet-500/[0.08] to-fuchsia-500/[0.08] border border-violet-500/15 rounded-2xl p-4 mb-6">
+        <div className="flex items-baseline justify-between mb-3">
+          <p className="text-white/40 text-[11px] tracking-wider uppercase">成長ステージ</p>
+          <p className="text-white/25 text-[10px]">累計 {totalCount}回練習</p>
+        </div>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-3xl">{currentStage.icon}</span>
+          <div>
+            <p className="text-white/80 text-sm font-medium">{currentStage.label}</p>
+            <p className="text-white/40 text-xs">{currentStage.desc}</p>
+          </div>
+        </div>
+        {nextThreshold && (
+          <>
+            <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden mb-2">
+              <div className="h-full rounded-full bg-gradient-to-r from-violet-500/70 to-fuchsia-500/70 transition-all duration-700"
+                style={{ width: `${stagePct}%` }} />
+            </div>
+            <p className="text-white/25 text-[10px] text-right">
+              次のステージまで あと {nextThreshold - totalCount}回
+            </p>
+          </>
+        )}
+        <div className="flex gap-1.5 mt-3">
+          {stages.map((s, i) => (
+            <div key={i} className={`flex-1 text-center py-1.5 rounded-lg text-[9px] ${
+              s.min <= totalCount
+                ? "bg-violet-500/20 text-violet-300/80"
+                : "bg-white/[0.03] text-white/20"
+            }`}>
+              <span className="block text-sm mb-0.5">{s.icon}</span>
+              {s.label}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Structure Score Growth */}
+      {structureTrend.length >= 2 && (
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 mb-6">
+          <p className="text-white/40 text-[11px] tracking-wider uppercase mb-1">構造的な話し方の成長</p>
+          <p className="text-white/20 text-[10px] mb-3">練習回数ごとの平均スコア推移</p>
+          <div className="flex items-end gap-2 h-24">
+            {structureTrend.map((d, i) => {
+              const barH = Math.max((d.avg / 10) * 100, 8);
+              const isLast = i === structureTrend.length - 1;
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <span className={`text-[10px] ${isLast ? "text-cyan-400/80" : "text-white/30"}`}>{d.avg}</span>
+                  <div className="w-full flex items-end" style={{ height: "72px" }}>
+                    <div className={`w-full rounded-t-md transition-all duration-500 ${
+                      isLast
+                        ? "bg-gradient-to-t from-cyan-500/60 to-cyan-400/40"
+                        : "bg-gradient-to-t from-white/10 to-white/[0.06]"
+                    }`} style={{ height: `${barH}%` }} />
+                  </div>
+                  <span className="text-[8px] text-white/20">{d.label}</span>
+                </div>
+              );
+            })}
+          </div>
+          {structureTrend.length >= 2 && (() => {
+            const first = structureTrend[0].avg;
+            const last = structureTrend[structureTrend.length - 1].avg;
+            const diff = Math.round((last - first) * 10) / 10;
+            if (diff > 0) return <p className="text-emerald-400/60 text-[10px] mt-2 text-center">📈 初期から +{diff} ポイント成長しています</p>;
+            if (diff === 0) return <p className="text-white/25 text-[10px] mt-2 text-center">安定したスコアを維持しています</p>;
+            return null;
+          })()}
         </div>
       )}
 
