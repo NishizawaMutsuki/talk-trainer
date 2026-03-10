@@ -26,8 +26,8 @@ export async function POST() {
     customerId = customer.id;
   }
 
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
+  const baseUrl = process.env.NEXTAUTH_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
   const checkoutSession = await stripe.checkout.sessions.create({
     customer: customerId,

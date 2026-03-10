@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { callAI, AIError, type AIModelKey, AI_MODELS } from "@/lib/ai-router";
+import { getUserByGoogleId } from "@/lib/db";
 import type { ChallengeInfo } from "@/lib/types";
 
 const CHALLENGE_PROMPT = `あなたは即興スピーチのコーチです。
@@ -45,24 +46,38 @@ function validateChallenge(data: unknown): data is ChallengeInfo {
 
 export async function POST(req: NextRequest) {
   try {
-    // ── 認証チェック ──
+    // ── 認証 & 認可チェック ──
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
     }
+    const googleId = (session.user as Record<string, unknown>).googleId as string;
+    const role = (session.user as Record<string, unknown>).role as string | undefined;
+    const isAdmin = role === "admin";
+    const user = await getUserByGoogleId(googleId);
+    const isPro = user?.plan === "pro" || isAdmin;
 
     const { pastTopics, aiModel: requestedModel } = await req.json().catch(() => ({ pastTopics: [], aiModel: undefined }));
 
+    // ── 入力サイズ制限 ──
+    if (Array.isArray(pastTopics) && pastTopics.length > 50) {
+      return NextResponse.json({ error: "過去のお題リストが長すぎます" }, { status: 400 });
+    }
+
     const pastSection = Array.isArray(pastTopics) && pastTopics.length > 0
-      ? `【過去に出したお題（これらと被らないようにすること）】\n${pastTopics.map((t: string) => `- ${t}`).join("\n")}`
+      ? `【過去に出したお題（これらと被らないようにすること）】\n${pastTopics.map((t: string) => `- ${String(t).slice(0, 200)}`).join("\n")}`
       : "";
 
     const prompt = CHALLENGE_PROMPT.replace("{past_topics}", pastSection);
 
-    // Use model from request body, default to gemini-flash
-    let selectedModel: AIModelKey = "gemini-flash";
+    // Use model from request body, default based on plan
+    let selectedModel: AIModelKey = isPro ? "gemini-pro" : "gemini-flash";
     if (requestedModel && AI_MODELS[requestedModel as AIModelKey]) {
-      selectedModel = requestedModel as AIModelKey;
+      const requested = requestedModel as AIModelKey;
+      const tier = AI_MODELS[requested].tier;
+      if (tier === "free" || isPro) {
+        selectedModel = requested;
+      }
     }
 
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -82,7 +97,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Challenge generation error:", err);
     const status = err instanceof AIError ? err.status : 500;
-    const message = err instanceof Error ? err.message : "お題の生成でエラーが発生しました";
+    const message = err instanceof AIError ? err.message : "お題の生成でエラーが発生しました";
     return NextResponse.json({ error: message }, { status });
   }
 }

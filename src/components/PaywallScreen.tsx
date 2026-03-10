@@ -51,7 +51,18 @@ export function PaywallScreen({ userStatus, onError, onBack }: PaywallScreenProp
               try {
                 const res = await fetch("/api/checkout", { method: "POST" });
                 const data = await res.json();
-                if (data.url) window.location.href = data.url;
+                if (data.url) {
+                  try {
+                    const parsed = new URL(data.url);
+                    if (parsed.hostname === "checkout.stripe.com" || parsed.hostname === "billing.stripe.com") {
+                      window.location.href = data.url;
+                    } else {
+                      onError("不正なリダイレクト先です");
+                    }
+                  } catch {
+                    onError("不正なURLです");
+                  }
+                }
               } catch {
                 onError("決済ページの取得に失敗しました");
               }

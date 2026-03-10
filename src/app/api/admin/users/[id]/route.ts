@@ -33,10 +33,29 @@ export async function PATCH(
     const before = await getUserById(userId);
     if (!before) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
+    const VALID_PLANS = ["free", "pro"];
+    const VALID_ROLES = ["user", "admin"];
+
     const updates: { plan?: string; usage_count?: number; role?: string } = {};
-    if (body.plan !== undefined) updates.plan = body.plan;
-    if (body.usage_count !== undefined) updates.usage_count = Number(body.usage_count);
-    if (body.role !== undefined) updates.role = body.role;
+    if (body.plan !== undefined) {
+      if (!VALID_PLANS.includes(body.plan)) {
+        return NextResponse.json({ error: "Invalid plan value" }, { status: 400 });
+      }
+      updates.plan = body.plan;
+    }
+    if (body.usage_count !== undefined) {
+      const count = Number(body.usage_count);
+      if (!Number.isInteger(count) || count < 0 || count > 100000) {
+        return NextResponse.json({ error: "Invalid usage_count value" }, { status: 400 });
+      }
+      updates.usage_count = count;
+    }
+    if (body.role !== undefined) {
+      if (!VALID_ROLES.includes(body.role)) {
+        return NextResponse.json({ error: "Invalid role value" }, { status: 400 });
+      }
+      updates.role = body.role;
+    }
 
     const after = await adminUpdateUser(userId, updates);
 

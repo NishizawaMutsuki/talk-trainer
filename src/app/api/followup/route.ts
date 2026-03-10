@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { callAI, AIError, type AIModelKey, AI_MODELS } from "@/lib/ai-router";
+import { getUserByGoogleId } from "@/lib/db";
 import { QUESTIONS } from "@/lib/constants";
 import type { FollowupInfo } from "@/lib/types";
 
@@ -80,16 +81,34 @@ function validateFollowup(data: unknown): data is FollowupInfo {
 
 export async function POST(req: NextRequest) {
   try {
-    // ── 認証チェック ──
+    // ── 認証 & 認可チェック ──
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
     }
+    const googleId = (session.user as Record<string, unknown>).googleId as string;
+    const role = (session.user as Record<string, unknown>).role as string | undefined;
+    const isAdmin = role === "admin";
+    const user = await getUserByGoogleId(googleId);
+    const isPro = user?.plan === "pro" || isAdmin;
 
     const { category, chain, aiModel: requestedModel } = await req.json();
 
     if (!chain?.length) {
       return NextResponse.json({ error: "会話チェーンが必要です" }, { status: 400 });
+    }
+
+    // ── 入力サイズ制限 ──
+    if (chain.length > 20) {
+      return NextResponse.json({ error: "会話チェーンが長すぎます" }, { status: 400 });
+    }
+    for (const turn of chain) {
+      if (typeof turn.question === "string" && turn.question.length > 2000) {
+        return NextResponse.json({ error: "質問テキストが長すぎます" }, { status: 400 });
+      }
+      if (typeof turn.answer === "string" && turn.answer.length > 10000) {
+        return NextResponse.json({ error: "回答テキストが長すぎます" }, { status: 400 });
+      }
     }
 
     const conversation = chain
@@ -119,10 +138,14 @@ export async function POST(req: NextRequest) {
     // Lower temperature for pick mode (just selecting), higher for generation
     const temperature = usePick ? 0.3 : 0.7;
 
-    // Use model from request body, default to gemini-flash
-    let selectedModel: AIModelKey = "gemini-flash";
+    // Use model from request body, default based on plan
+    let selectedModel: AIModelKey = isPro ? "gemini-pro" : "gemini-flash";
     if (requestedModel && AI_MODELS[requestedModel as AIModelKey]) {
-      selectedModel = requestedModel as AIModelKey;
+      const requested = requestedModel as AIModelKey;
+      const tier = AI_MODELS[requested].tier;
+      if (tier === "free" || isPro) {
+        selectedModel = requested;
+      }
     }
 
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -151,7 +174,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Followup generation error:", err);
     const status = err instanceof AIError ? err.status : 500;
-    const message = err instanceof Error ? err.message : "深掘り質問の生成でエラーが発生しました";
+    const message = err instanceof AIError ? err.message : "深掘り質問の生成でエラーが発生しました";
     return NextResponse.json({ error: message }, { status });
   }
 }

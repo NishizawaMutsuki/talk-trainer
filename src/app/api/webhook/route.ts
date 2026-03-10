@@ -8,16 +8,20 @@ export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = req.headers.get("stripe-signature");
 
-  // Webhook署名検証（STRIPE_WEBHOOK_SECRETが設定されている場合）
+  // Webhook署名検証（必須）
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error("STRIPE_WEBHOOK_SECRET is not configured");
+    return NextResponse.json({ error: "Webhook設定エラー" }, { status: 500 });
+  }
+  if (!sig) {
+    return NextResponse.json({ error: "署名ヘッダーがありません" }, { status: 400 });
+  }
+
   let event: Stripe.Event;
-  if (process.env.STRIPE_WEBHOOK_SECRET && sig) {
-    try {
-      event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } catch {
-      return NextResponse.json({ error: "署名検証失敗" }, { status: 400 });
-    }
-  } else {
-    event = JSON.parse(body) as Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch {
+    return NextResponse.json({ error: "署名検証失敗" }, { status: 400 });
   }
 
   switch (event.type) {

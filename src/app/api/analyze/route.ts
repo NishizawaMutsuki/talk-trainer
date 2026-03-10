@@ -117,6 +117,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "question と answer は必須です" }, { status: 400 });
     }
 
+    // ── 入力サイズ制限 ──
+    if (typeof question === "string" && question.length > 2000) {
+      return NextResponse.json({ error: "質問テキストが長すぎます" }, { status: 400 });
+    }
+    if (typeof answer === "string" && answer.length > 10000) {
+      return NextResponse.json({ error: "回答テキストが長すぎます" }, { status: 400 });
+    }
+    if (Array.isArray(chain) && chain.length > 20) {
+      return NextResponse.json({ error: "会話チェーンが長すぎます" }, { status: 400 });
+    }
+
     // Select relevant knowledge insights for this category
     const knowledgeSection = getInsightsForCategory(category || "");
 
@@ -161,7 +172,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Analysis error:", err);
     const status = err instanceof AIError ? err.status : 500;
-    const message = err instanceof Error ? err.message : "分析処理でエラーが発生しました";
+    const message = err instanceof AIError ? err.message : "分析処理でエラーが発生しました";
     return NextResponse.json({ error: message }, { status });
   }
 }
