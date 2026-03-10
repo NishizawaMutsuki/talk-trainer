@@ -10,7 +10,9 @@ interface ResultScreenProps {
   transcript: string;
   seconds: number;
   chain: ChainTurn[];
+  isChallenge?: boolean;
   onDeepDive: () => void;
+  onNextChallenge?: () => void;
   onHome: () => void;
   onRetry: () => void;
 }
@@ -21,7 +23,9 @@ export function ResultScreen({
   transcript,
   seconds,
   chain,
+  isChallenge,
   onDeepDive,
+  onNextChallenge,
   onHome,
   onRetry,
 }: ResultScreenProps) {
@@ -194,6 +198,12 @@ export function ResultScreen({
 
       {/* Actions */}
       <div className="space-y-3">
+        {isChallenge && onNextChallenge && (
+          <button onClick={onNextChallenge}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-orange-500/70 to-amber-500/70 text-white text-sm tracking-wider shadow-lg shadow-orange-500/10 hover:shadow-orange-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all">
+            🎲 次のお題にチャレンジ
+          </button>
+        )}
         {chain.length < MAX_CHAIN_DEPTH && (
           <button onClick={onDeepDive}
             className="w-full py-4 rounded-xl bg-gradient-to-r from-violet-500/70 to-fuchsia-500/70 text-white text-sm tracking-wider shadow-lg shadow-violet-500/10 hover:shadow-violet-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all">

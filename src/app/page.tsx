@@ -496,7 +496,9 @@ export default function TalkTrainer() {
           transcript={transcript}
           seconds={seconds}
           chain={chain}
+          isChallenge={category === CHALLENGE_CATEGORY}
           onDeepDive={startDeepDive}
+          onNextChallenge={() => startPractice(CHALLENGE_CATEGORY)}
           onHome={() => { resetDeepDive(); setScreen("home"); }}
           onRetry={() => {
             setQuestion(rootQuestion);
