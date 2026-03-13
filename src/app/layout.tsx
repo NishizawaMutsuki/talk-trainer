@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Providers from "@/components/Providers";
+import { WebViewBanner } from "@/components/WebViewBanner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default function RootLayout({
         <div className="bg-grid" />
         <div className="noise-overlay" />
         {/* Main content */}
+        <WebViewBanner />
         <div className="screen-content">
           <Providers>{children}</Providers>
         </div>
