@@ -2,7 +2,8 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { QUESTIONS, CHALLENGE_CATEGORY } from "@/lib/constants";
-import type { HistoryEntry, UserStatus, AIModelKey } from "@/lib/types";
+import type { HistoryEntry, UserStatus, AIModelKey, CustomQuestionList } from "@/lib/types";
+import { customListCategory } from "@/lib/utils";
 import { useMemo, useState } from "react";
 
 const MODEL_LABELS: Record<AIModelKey, { label: string; desc: string; badge?: string }> = {
@@ -45,23 +46,27 @@ function AscentLogoMark() {
 interface HomeScreenProps {
   userStatus: UserStatus;
   history: HistoryEntry[];
+  customLists: CustomQuestionList[];
   error: string | null;
   selectedModel: AIModelKey;
   onModelChange: (model: AIModelKey) => void;
   onClearError: () => void;
   onStartPractice: (category: string) => void;
   onNavigate: (screen: "dashboard" | "history") => void;
+  onEditCustomList: (list: CustomQuestionList | null) => void;
 }
 
 export function HomeScreen({
   userStatus,
   history,
+  customLists,
   error,
   selectedModel,
   onModelChange,
   onClearError,
   onStartPractice,
   onNavigate,
+  onEditCustomList,
 }: HomeScreenProps) {
   const { data: session, status: authStatus } = useSession();
   const role = (session?.user as Record<string, unknown> | undefined)?.role as string | undefined;
@@ -250,6 +255,72 @@ export function HomeScreen({
             );
           })}
         </div>
+      </div>
+
+      {/* ── Custom Question Lists ── */}
+      <div className="anim-fade-in-up anim-d5 mb-10">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[10px] tracking-[0.2em] uppercase text-white/25" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            マイ質問リスト
+          </p>
+          <button
+            onClick={() => onEditCustomList(null)}
+            className="text-[10px] text-cyan-400/50 hover:text-cyan-400/80 transition-colors"
+          >
+            + 新規作成
+          </button>
+        </div>
+        {customLists.length > 0 ? (
+          <div className="space-y-2">
+            {customLists.map(list => {
+              const cat = customListCategory(list);
+              const isSelected = selectedCategory === cat;
+              const practiced = new Set(
+                history.filter(h => h.category === cat).map(h => h.question)
+              ).size;
+              return (
+                <div key={list.id} className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedCategory(isSelected ? null : cat)}
+                    className={`flex-1 px-5 py-4 rounded-xl text-left transition-all duration-300 border overflow-hidden relative ${
+                      isSelected
+                        ? "bg-white/[0.06] border-cyan-500/25 shadow-lg shadow-cyan-500/5"
+                        : "bg-white/[0.015] border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.08]"
+                    }`}
+                  >
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.06] to-violet-500/[0.04] pointer-events-none" />
+                    )}
+                    <div className="relative">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs transition-colors ${isSelected ? "text-cyan-400/70" : "text-white/20"}`}>📋</span>
+                        <span className={`text-[13px] font-medium transition-colors ${isSelected ? "text-white/90" : "text-white/50"}`}>{list.name}</span>
+                      </div>
+                      <div className="text-[10px] text-white/20 ml-5">
+                        {list.questions.length}問
+                        {practiced > 0 && <span className="text-emerald-400/40 ml-1.5">（{practiced}問練習済）</span>}
+                      </div>
+                    </div>
+                    {isSelected && <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-cyan-400 glow-ring" />}
+                  </button>
+                  <button
+                    onClick={() => onEditCustomList(list)}
+                    className="px-3 rounded-xl bg-white/[0.015] border border-white/[0.04] text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-all text-xs"
+                  >
+                    編集
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <button
+            onClick={() => onEditCustomList(null)}
+            className="w-full px-5 py-6 rounded-xl border border-dashed border-white/[0.08] text-white/20 text-xs hover:border-white/[0.15] hover:text-white/40 transition-all"
+          >
+            面接で聞かれそうな質問を登録して練習しましょう
+          </button>
+        )}
       </div>
 
       {/* ── CTA ── */}

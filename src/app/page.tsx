@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
 
 // ─── Shared modules ─────────────────────────────────────────────
-import type { Screen, AnalysisResult, HistoryEntry, ChainTurn, FollowupInfo, ChallengeInfo, UserStatus, AIModelKey } from "@/lib/types";
+import type { Screen, AnalysisResult, HistoryEntry, ChainTurn, FollowupInfo, ChallengeInfo, UserStatus, AIModelKey, CustomQuestionList } from "@/lib/types";
 import {
   FRAMEWORKS,
   COACHING_TIPS,
@@ -19,7 +19,12 @@ import {
   persistHistory,
   loadDailyGoal,
   persistDailyGoal,
+  loadCustomLists,
+  persistCustomLists,
+  customListCategory,
+  isCustomCategory,
   pickQuestion,
+  pickCustomQuestion,
   fwNameToKey,
 } from "@/lib/utils";
 import { HistoryList } from "@/components/ui";
@@ -31,6 +36,7 @@ import { DashboardScreen } from "@/components/DashboardScreen";
 import { ResultScreen } from "@/components/ResultScreen";
 import { PaywallScreen } from "@/components/PaywallScreen";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { CustomListEditScreen } from "@/components/CustomListEditScreen";
 
 // ─── Main App ───────────────────────────────────────────────────
 
@@ -56,6 +62,10 @@ export default function TalkTrainer() {
 
   // 1分チャレンジ state
   const [challengeInfo, setChallengeInfo] = useState<ChallengeInfo | null>(null);
+
+  // カスタム質問リスト
+  const [customLists, setCustomLists] = useState<CustomQuestionList[]>([]);
+  const [editingList, setEditingList] = useState<CustomQuestionList | null | undefined>(undefined); // undefined=非表示, null=新規, object=編集
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -90,6 +100,7 @@ export default function TalkTrainer() {
     setHistory(h);
     historyRef.current = h;
     setDailyGoal(loadDailyGoal());
+    setCustomLists(loadCustomLists());
   }, []);
 
   // ── Fetch user status ──
@@ -129,6 +140,27 @@ export default function TalkTrainer() {
   const updateDailyGoal = useCallback((g: number) => {
     setDailyGoal(g);
     persistDailyGoal(g);
+  }, []);
+
+  const saveCustomList = useCallback((list: CustomQuestionList) => {
+    setCustomLists(prev => {
+      const idx = prev.findIndex(l => l.id === list.id);
+      const next = idx >= 0 ? prev.map(l => l.id === list.id ? list : l) : [...prev, list];
+      persistCustomLists(next);
+      return next;
+    });
+    setEditingList(undefined);
+    setScreen("home");
+  }, []);
+
+  const deleteCustomList = useCallback((id: string) => {
+    setCustomLists(prev => {
+      const next = prev.filter(l => l.id !== id);
+      persistCustomLists(next);
+      return next;
+    });
+    setEditingList(undefined);
+    setScreen("home");
   }, []);
 
   // ── Reset helpers ──
@@ -183,13 +215,25 @@ export default function TalkTrainer() {
         setError("お題の生成に失敗しました: " + (e instanceof Error ? e.message : ""));
         setScreen("home");
       }
+    } else if (isCustomCategory(cat)) {
+      const listId = cat.replace("custom:", "");
+      const list = customLists.find(l => l.id === listId);
+      if (!list || !list.questions.length) {
+        setError("質問リストが空です");
+        setScreen("home");
+        return;
+      }
+      const q = pickCustomQuestion(list.questions, cat, history);
+      setQuestion(q);
+      setRootQuestion(q);
+      setScreen("practice");
     } else {
       const q = pickQuestion(cat, history);
       setQuestion(q);
       setRootQuestion(q);
       setScreen("practice");
     }
-  }, [history, resetDeepDive, userStatus, selectedModel]);
+  }, [history, resetDeepDive, userStatus, selectedModel, customLists]);
 
   // ── Deep Dive ──
   const startDeepDive = useCallback(async () => {
@@ -412,7 +456,10 @@ export default function TalkTrainer() {
   }, [transcript, recommendedFrameworks, question, category, seconds, saveHistory, chain, rootQuestion, fetchUserStatus, selectedModel]);
 
   // ── Screen label helper ──
-  const screenLabel = isDeepDive ? `${category} — 深掘り ${chain.length}回目` : category;
+  const displayCategory = isCustomCategory(category)
+    ? customLists.find(l => customListCategory(l) === category)?.name ?? "マイリスト"
+    : category;
+  const screenLabel = isDeepDive ? `${displayCategory} — 深掘り ${chain.length}回目` : displayCategory;
 
   // ── Render ──
   return (
@@ -423,12 +470,14 @@ export default function TalkTrainer() {
         <HomeScreen
           userStatus={userStatus}
           history={history}
+          customLists={customLists}
           error={error}
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
           onClearError={() => setError(null)}
           onStartPractice={startPractice}
           onNavigate={setScreen}
+          onEditCustomList={(list) => { setEditingList(list); setScreen("custom-list-edit"); }}
         />
       )}
 
@@ -516,6 +565,15 @@ export default function TalkTrainer() {
 
       {screen === "challenge-generating" && (
         <LoadingScreen variant="challenge" chainLength={chain.length} isDeepDive={isDeepDive} coachingTip={coachingTip} />
+      )}
+
+      {screen === "custom-list-edit" && (
+        <CustomListEditScreen
+          list={editingList ?? null}
+          onSave={saveCustomList}
+          onDelete={editingList ? () => deleteCustomList(editingList.id) : undefined}
+          onBack={() => setScreen("home")}
+        />
       )}
 
       {screen === "paywall" && (

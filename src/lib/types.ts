@@ -104,6 +104,15 @@ export interface ChallengeInfo {
   tip: string;
 }
 
+// ─── Custom Question Lists ───────────────────────────────────────
+
+export interface CustomQuestionList {
+  id: string;
+  name: string; // e.g. "ソフトバンク 二次面接"
+  questions: string[];
+  createdAt: string;
+}
+
 // ─── Screens ────────────────────────────────────────────────────
 
 export type Screen =
@@ -117,6 +126,7 @@ export type Screen =
   | "history"
   | "followup-generating"
   | "challenge-generating"
+  | "custom-list-edit"
   | "paywall";
 
 // ─── User Status ────────────────────────────────────────────────

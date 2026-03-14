@@ -1,4 +1,4 @@
-import type { HistoryEntry } from "./types";
+import type { HistoryEntry, CustomQuestionList } from "./types";
 import {
   QUESTIONS,
   FRAMEWORKS,
@@ -71,6 +71,7 @@ export function getRecommendedFrameworks(q: string, cat: string): string[] {
 const STORAGE_KEYS = {
   history: "talk-trainer-history",
   dailyGoal: "talk-trainer-daily-goal",
+  customLists: "talk-trainer-custom-lists",
 } as const;
 
 export function loadHistory(): HistoryEntry[] {
@@ -104,6 +105,48 @@ export function persistDailyGoal(goal: number): void {
   try {
     localStorage.setItem(STORAGE_KEYS.dailyGoal, String(goal));
   } catch {}
+}
+
+// ─── Custom Question Lists ──────────────────────────────────────
+
+export function loadCustomLists(): CustomQuestionList[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.customLists);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function persistCustomLists(lists: CustomQuestionList[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.customLists, JSON.stringify(lists));
+  } catch {}
+}
+
+/** カスタムリストのカテゴリ名（プレフィックス付き） */
+export function customListCategory(list: CustomQuestionList): string {
+  return `custom:${list.id}`;
+}
+
+/** カテゴリ名がカスタムリストかどうか */
+export function isCustomCategory(cat: string): boolean {
+  return cat.startsWith("custom:");
+}
+
+/** カスタムリストから未練習の質問を優先して選ぶ */
+export function pickCustomQuestion(
+  questions: string[],
+  category: string,
+  history: HistoryEntry[]
+): string {
+  if (!questions.length) return "";
+  const practiced = new Set(
+    history.filter(h => h.category === category).map(h => h.question)
+  );
+  const unpracticed = questions.filter(q => !practiced.has(q));
+  const candidates = unpracticed.length > 0 ? unpracticed : questions;
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 // ─── Question Helpers ────────────────────────────────────────────
