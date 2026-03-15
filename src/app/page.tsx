@@ -486,6 +486,7 @@ export default function TalkTrainer() {
         <DashboardScreen
           history={history}
           dailyGoal={dailyGoal}
+          selectedModel={selectedModel}
           onGoalChange={updateDailyGoal}
           onBack={() => setScreen("home")}
           onStartPractice={() => setScreen("home")}

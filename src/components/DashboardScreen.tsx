@@ -1,17 +1,19 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import {
   QUESTIONS,
   TOTAL_QUESTIONS,
   DAY_LABELS,
   CHALLENGE_CATEGORY,
 } from "@/lib/constants";
-import type { HistoryEntry } from "@/lib/types";
-import { getTodayKey, calcStreak, getWeekDates, allQuestionTexts } from "@/lib/utils";
+import type { HistoryEntry, HabitAnalysis, AIModelKey } from "@/lib/types";
+import { getTodayKey, calcStreak, getWeekDates, allQuestionTexts, loadHabitAnalysis, persistHabitAnalysis } from "@/lib/utils";
 
 interface DashboardProps {
   history: HistoryEntry[];
   dailyGoal: number;
+  selectedModel: AIModelKey;
   onGoalChange: (goal: number) => void;
   onBack: () => void;
   onStartPractice: () => void;
@@ -20,10 +22,49 @@ interface DashboardProps {
 export function DashboardScreen({
   history,
   dailyGoal,
+  selectedModel,
   onGoalChange,
   onBack,
   onStartPractice,
 }: DashboardProps) {
+  const [habitAnalysis, setHabitAnalysis] = useState<HabitAnalysis | null>(() => loadHabitAnalysis());
+  const [habitLoading, setHabitLoading] = useState(false);
+  const [habitError, setHabitError] = useState<string | null>(null);
+  const [showHabitDetail, setShowHabitDetail] = useState(false);
+
+  const runHabitAnalysis = useCallback(async () => {
+    const withAnswers = history.filter(h => h.answer?.trim());
+    if (withAnswers.length < 5) {
+      setHabitError("回答テキスト付きの練習が5回以上必要です");
+      return;
+    }
+    setHabitLoading(true);
+    setHabitError(null);
+    try {
+      const sessions = withAnswers.slice(0, 15).map(h => ({
+        question: h.question,
+        answer: h.answer,
+        improvements: h.improvements,
+        score: h.overall_score,
+      }));
+      const res = await fetch("/api/habits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessions, aiModel: selectedModel }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data: HabitAnalysis = await res.json();
+      setHabitAnalysis(data);
+      persistHabitAnalysis(data);
+    } catch (e) {
+      setHabitError(e instanceof Error ? e.message : "診断に失敗しました");
+    } finally {
+      setHabitLoading(false);
+    }
+  }, [history, selectedModel]);
   const today = getTodayKey();
   const todayEntries = history.filter(h => h.date === today);
   const todayCount = todayEntries.length;
@@ -234,6 +275,121 @@ export function DashboardScreen({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Habit Analysis (癖診断) */}
+      <div className="bg-gradient-to-br from-rose-500/[0.08] to-orange-500/[0.08] border border-rose-500/15 rounded-2xl p-4 mb-6">
+        <div className="flex items-baseline justify-between mb-3">
+          <p className="text-white/40 text-[11px] tracking-wider uppercase">話し方の癖診断</p>
+          {habitAnalysis && (
+            <p className="text-white/20 text-[10px]">
+              {habitAnalysis.sampleCount}回分のデータで分析
+            </p>
+          )}
+        </div>
+
+        {habitAnalysis ? (
+          <>
+            {/* Overall impression */}
+            <div className="bg-white/[0.04] rounded-xl px-4 py-3 mb-3">
+              <p className="text-white/60 text-xs leading-relaxed">{habitAnalysis.overallImpression}</p>
+            </div>
+
+            {/* Radar-like dimension scores */}
+            <div className="space-y-2 mb-3">
+              {habitAnalysis.dimensions.map((dim) => {
+                const color = dim.score >= 7 ? "emerald" : dim.score >= 4 ? "amber" : "rose";
+                return (
+                  <div key={dim.dimension}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-white/50 text-[11px]">{dim.dimension}</span>
+                      <span className={`text-${color}-400/70 text-[11px] font-medium`}>{dim.score}/10</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-700 ${
+                        dim.score >= 7 ? "bg-gradient-to-r from-emerald-500/60 to-emerald-400/60"
+                          : dim.score >= 4 ? "bg-gradient-to-r from-amber-500/60 to-amber-400/60"
+                          : "bg-gradient-to-r from-rose-500/60 to-rose-400/60"
+                      }`} style={{ width: `${dim.score * 10}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Biggest habit & strength */}
+            <div className="space-y-2 mb-3">
+              <div className="bg-rose-500/[0.08] border border-rose-500/15 rounded-xl px-3 py-2.5">
+                <p className="text-rose-400/60 text-[9px] tracking-wider uppercase mb-1">最優先で直すべき癖</p>
+                <p className="text-white/70 text-xs leading-relaxed">{habitAnalysis.biggestHabit}</p>
+              </div>
+              <div className="bg-emerald-500/[0.08] border border-emerald-500/15 rounded-xl px-3 py-2.5">
+                <p className="text-emerald-400/60 text-[9px] tracking-wider uppercase mb-1">最大の武器</p>
+                <p className="text-white/70 text-xs leading-relaxed">{habitAnalysis.biggestStrength}</p>
+              </div>
+              <div className="bg-cyan-500/[0.08] border border-cyan-500/15 rounded-xl px-3 py-2.5">
+                <p className="text-cyan-400/60 text-[9px] tracking-wider uppercase mb-1">次の10回で意識すること</p>
+                <p className="text-white/70 text-xs leading-relaxed">{habitAnalysis.nextFocus}</p>
+              </div>
+            </div>
+
+            {/* Expandable detail */}
+            <button
+              onClick={() => setShowHabitDetail(!showHabitDetail)}
+              className="text-white/25 text-[10px] hover:text-white/50 transition-colors w-full text-center"
+            >
+              {showHabitDetail ? "△ 詳細を閉じる" : "▽ 各軸の詳細と練習法を見る"}
+            </button>
+
+            {showHabitDetail && (
+              <div className="mt-3 space-y-3">
+                {habitAnalysis.dimensions.map((dim) => (
+                  <div key={dim.dimension} className="bg-white/[0.02] border border-white/[0.04] rounded-xl px-3 py-2.5">
+                    <p className="text-white/50 text-[11px] font-medium mb-1.5">{dim.dimension}（{dim.score}/10）</p>
+                    <p className="text-white/40 text-[10px] leading-relaxed mb-1">
+                      <span className="text-rose-400/50">癖:</span> {dim.habit}
+                    </p>
+                    <p className="text-white/30 text-[10px] leading-relaxed mb-1">
+                      <span className="text-white/40">根拠:</span> {dim.evidence}
+                    </p>
+                    <p className="text-cyan-400/50 text-[10px] leading-relaxed">
+                      <span className="text-cyan-400/60">練習法:</span> {dim.exercise}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Re-analyze button */}
+            <button
+              onClick={runHabitAnalysis}
+              disabled={habitLoading}
+              className="mt-3 w-full py-2 rounded-lg text-[10px] text-white/25 hover:text-white/50 bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.04] transition-all"
+            >
+              {habitLoading ? "分析中..." : "再診断する"}
+            </button>
+          </>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-white/30 text-xs mb-3">
+              練習データからあなたの話し方の癖を<br />AIが本気で診断します
+            </p>
+            {habitError && (
+              <p className="text-rose-400/60 text-[10px] mb-2">{habitError}</p>
+            )}
+            <button
+              onClick={runHabitAnalysis}
+              disabled={habitLoading || history.filter(h => h.answer?.trim()).length < 5}
+              className={`px-6 py-2.5 rounded-xl text-xs transition-all ${
+                habitLoading || history.filter(h => h.answer?.trim()).length < 5
+                  ? "bg-white/[0.04] text-white/20 cursor-not-allowed"
+                  : "bg-gradient-to-r from-rose-500/60 to-orange-500/60 text-white hover:shadow-lg hover:shadow-rose-500/10"
+              }`}
+            >
+              {habitLoading ? "分析中..." : history.filter(h => h.answer?.trim()).length < 5 ? `あと${5 - history.filter(h => h.answer?.trim()).length}回練習が必要` : "癖を診断する"}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Structure Score Growth */}

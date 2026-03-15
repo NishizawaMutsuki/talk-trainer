@@ -104,6 +104,38 @@ export interface ChallengeInfo {
   tip: string;
 }
 
+// ─── Habit Analysis (癖診断) ─────────────────────────────────────
+
+export interface HabitDimension {
+  /** 診断軸の名前 */
+  dimension: string;
+  /** 1-10 のスコア */
+  score: number;
+  /** この人の具体的な癖（例: 「結論を最後に持ってくる傾向がある」） */
+  habit: string;
+  /** 回答からの具体的な証拠（原文引用） */
+  evidence: string;
+  /** 改善のための具体的な練習法 */
+  exercise: string;
+}
+
+export interface HabitAnalysis {
+  /** 分析日時 */
+  analyzedAt: string;
+  /** 分析に使った練習回数 */
+  sampleCount: number;
+  /** 7軸の診断結果 */
+  dimensions: HabitDimension[];
+  /** この人の最大の強み（1つ） */
+  biggestStrength: string;
+  /** この人が最優先で直すべき癖（1つ） */
+  biggestHabit: string;
+  /** 次の10回の練習で意識すべきこと */
+  nextFocus: string;
+  /** 話し方の総合的な特徴（面接官視点で1文） */
+  overallImpression: string;
+}
+
 // ─── Custom Question Lists ───────────────────────────────────────
 
 export interface CustomQuestionList {

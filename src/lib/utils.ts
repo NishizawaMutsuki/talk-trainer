@@ -1,4 +1,4 @@
-import type { HistoryEntry, CustomQuestionList } from "./types";
+import type { HistoryEntry, CustomQuestionList, HabitAnalysis } from "./types";
 import {
   QUESTIONS,
   FRAMEWORKS,
@@ -72,6 +72,7 @@ const STORAGE_KEYS = {
   history: "talk-trainer-history",
   dailyGoal: "talk-trainer-daily-goal",
   customLists: "talk-trainer-custom-lists",
+  habitAnalysis: "talk-trainer-habit-analysis",
 } as const;
 
 export function loadHistory(): HistoryEntry[] {
@@ -104,6 +105,23 @@ export function loadDailyGoal(): number {
 export function persistDailyGoal(goal: number): void {
   try {
     localStorage.setItem(STORAGE_KEYS.dailyGoal, String(goal));
+  } catch {}
+}
+
+// ─── Habit Analysis Cache ────────────────────────────────────────
+
+export function loadHabitAnalysis(): HabitAnalysis | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.habitAnalysis);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistHabitAnalysis(analysis: HabitAnalysis): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.habitAnalysis, JSON.stringify(analysis));
   } catch {}
 }
 
