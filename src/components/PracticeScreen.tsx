@@ -42,7 +42,7 @@ export function PracticeScreen({
             {isDeepDive ? "深掘り質問" : "質問"}
           </span>
         </div>
-        <h2 className="text-2xl font-light text-white/85 leading-relaxed max-w-lg mx-auto">{question}</h2>
+        <h2 className="text-2xl font-light text-white/85 leading-relaxed max-w-lg mx-auto">{question || challengeInfo?.question || "質問を読み込み中..."}</h2>
       </div>
 
       {/* Context cards — varies by mode */}

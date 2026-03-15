@@ -207,9 +207,10 @@ export default function TalkTrainer() {
         const data: ChallengeInfo = await res.json();
         if (!data.question?.trim()) throw new Error("お題が生成されませんでした");
 
+        const q = data.question.trim();
         setChallengeInfo(data);
-        setQuestion(data.question);
-        setRootQuestion(data.question);
+        setQuestion(q);
+        setRootQuestion(q);
         setScreen("practice");
       } catch (e) {
         setError("お題の生成に失敗しました: " + (e instanceof Error ? e.message : ""));
@@ -550,10 +551,12 @@ export default function TalkTrainer() {
           onNextChallenge={() => startPractice(CHALLENGE_CATEGORY)}
           onHome={() => { resetDeepDive(); setScreen("home"); }}
           onRetry={() => {
-            setQuestion(rootQuestion);
+            const q = rootQuestion || question;
+            resetDeepDive();
+            setQuestion(q);
+            setRootQuestion(q);
             setTranscript("");
             setSeconds(0);
-            resetDeepDive();
             setScreen("practice");
           }}
         />
